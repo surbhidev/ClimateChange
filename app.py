@@ -69,7 +69,7 @@ INDIA_STATES = {
 }
 
 # -----------------------
-# Simple caches
+# Caches
 # -----------------------
 if "temp" not in st.session_state: st.session_state["temp"] = {}
 if "wind" not in st.session_state: st.session_state["wind"] = {}
@@ -93,20 +93,21 @@ def speed_to_color(speed, vmax=15.0):
     else:
         t = (frac - 0.66) / 0.34
         r, g, b = 255, int(255 * (1 - t)), 0
-    r = max(0, min(255, r)); g = max(0, min(255, g)); b = max(0, min(255, b))
     return f"rgb({r},{g},{b})"
+
 
 def destination_point(lat, lon, bearing_deg, distance_km):
     R = 6371.0
-    bearing = math.radians(bearing_deg)
+    br = math.radians(bearing_deg)
     lat1 = math.radians(lat)
     lon1 = math.radians(lon)
     d = distance_km / R
     lat2 = math.asin(math.sin(lat1) * math.cos(d) +
-                     math.cos(lat1) * math.sin(d) * math.cos(bearing))
-    lon2 = lon1 + math.atan2(math.sin(bearing) * math.sin(d) * math.cos(lat1),
+                     math.cos(lat1) * math.sin(d) * math.cos(br))
+    lon2 = lon1 + math.atan2(math.sin(br) * math.sin(d) * math.cos(lat1),
                              math.cos(d) - math.sin(lat1) * math.sin(lat2))
     return math.degrees(lat2), (math.degrees(lon2) + 540) % 360 - 180
+
 
 def deg_to_compass(deg):
     if deg is None:
@@ -116,17 +117,18 @@ def deg_to_compass(deg):
     return dirs[int((deg + 11.25) / 22.5) % 16]
 
 # -----------------------
-# Open-Meteo API helpers
+# Open-Meteo API Helpers
 # -----------------------
 def get_temp(lat, lon):
     key = f"T:{lat:.3f}:{lon:.3f}"
     if key in st.session_state["temp"]:
         return st.session_state["temp"][key]
     try:
-        resp = requests.get("https://api.open-meteo.com/v1/forecast",
-                            params={"latitude": lat, "longitude": lon,
-                                    "hourly": "temperature_2m", "timezone": "auto"},
-                            timeout=8).json()
+        resp = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={"latitude": lat, "longitude": lon,
+                    "hourly": "temperature_2m", "timezone": "auto"},
+            timeout=8).json()
         val = resp.get("hourly", {}).get("temperature_2m", [None])[0]
         st.session_state["temp"][key] = val
         return val
@@ -134,22 +136,26 @@ def get_temp(lat, lon):
         st.session_state["temp"][key] = None
         return None
 
+
 def get_wind(lat, lon):
     key = f"W:{lat:.3f}:{lon:.3f}"
     if key in st.session_state["wind"]:
         return st.session_state["wind"][key]
     try:
-        resp = requests.get("https://api.open-meteo.com/v1/forecast",
-                            params={"latitude": lat, "longitude": lon,
-                                    "hourly": "windspeed_10m,winddirection_10m", "timezone": "auto"},
-                            timeout=8).json()
-        ws = resp.get("hourly", {}).get("windspeed_10m", [None])[0]
-        wd = resp.get("hourly", {}).get("winddirection_10m", [None])[0]
+        resp = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={"latitude": lat, "longitude": lon,
+                    "hourly": "windspeed_10m,winddirection_10m",
+                    "timezone": "auto"},
+            timeout=8).json()
+        ws = resp["hourly"]["windspeed_10m"][0]
+        wd = resp["hourly"]["winddirection_10m"][0]
         st.session_state["wind"][key] = (ws, wd)
         return ws, wd
     except:
         st.session_state["wind"][key] = (None, None)
         return None, None
+
 
 def get_forecast(lat, lon):
     key = f"F:{lat:.3f}:{lon:.3f}"
@@ -160,8 +166,10 @@ def get_forecast(lat, lon):
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": lat, "longitude": lon,
-                "hourly": "temperature_2m,relativehumidity_2m,windspeed_10m,winddirection_10m",
-                "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+                "hourly":
+                    "temperature_2m,relativehumidity_2m,windspeed_10m,winddirection_10m",
+                "daily":
+                    "temperature_2m_max,temperature_2m_min,precipitation_sum",
                 "timezone": "auto"
             },
             timeout=10).json()
@@ -171,6 +179,7 @@ def get_forecast(lat, lon):
         st.session_state["forecast"][key] = {}
         return {}
 
+
 def get_air(lat, lon):
     key = f"A:{lat:.3f}:{lon:.3f}"
     if key in st.session_state["air"]:
@@ -178,7 +187,8 @@ def get_air(lat, lon):
     try:
         resp = requests.get(
             "https://air-quality-api.open-meteo.com/v1/air-quality",
-            params={"latitude": lat, "longitude": lon, "hourly": "pm10,pm2_5,us_aqi"},
+            params={"latitude": lat, "longitude": lon,
+                    "hourly": "pm10,pm2_5,us_aqi"},
             timeout=10).json()
         st.session_state["air"][key] = resp
         return resp
@@ -187,7 +197,7 @@ def get_air(lat, lon):
         return {}
 
 # -----------------------
-# 48-hour plot with vline
+# 48-hour plot
 # -----------------------
 def plot_temp48(forecast):
     try:
@@ -205,10 +215,8 @@ def plot_temp48(forecast):
 
         if df["time"].min() <= now <= df["time"].max():
             xloc = now
-        elif now < df["time"].min():
-            xloc = df["time"].min()
         else:
-            xloc = df["time"].max()
+            xloc = df["time"].min()
 
         fig.add_vline(x=xloc, line_width=3, line_dash="dash",
                       line_color="#ff4d4d", opacity=0.9)
@@ -262,14 +270,14 @@ fig.add_trace(go.Scattergeo(
     textposition="top center"
 ))
 
-# placeholders (3 per wind arrow)
+# placeholders for wind arrow pieces
 for p in wind_points:
     fig.add_trace(go.Scattergeo(lat=[None], lon=[None], mode="lines", line=dict(width=4, color=p["color"])))
     fig.add_trace(go.Scattergeo(lat=[None], lon=[None], mode="lines", line=dict(width=4, color=p["color"])))
     fig.add_trace(go.Scattergeo(lat=[None], lon=[None], mode="lines", line=dict(width=4, color=p["color"])))
 
 # -----------------------
-# Animation frames (500 km arrows)
+# Animation frames
 # -----------------------
 N = 20
 OSC = 12
@@ -279,35 +287,28 @@ HEAD = 150
 frames = []
 for i in range(N):
     phase = 2*pi*(i/N)
-    frame_data = [fig.data[0]]
+    fdata = [fig.data[0]]
     for idx, p in enumerate(wind_points):
         base = float(p["wd"])
         bearing = base + OSC * math.sin(phase + idx*0.3)
 
         lat2, lon2 = destination_point(p["lat"], p["lon"], bearing, MAIN)
-
         left_lat, left_lon = destination_point(lat2, lon2, bearing+150, HEAD)
         right_lat, right_lon = destination_point(lat2, lon2, bearing-150, HEAD)
 
-        frame_data.append(go.Scattergeo(
-            lat=[p["lat"], lat2], lon=[p["lon"], lon2],
-            mode="lines", line=dict(width=4, color=p["color"])
-        ))
-        frame_data.append(go.Scattergeo(
-            lat=[lat2, left_lat], lon=[lon2, left_lon],
-            mode="lines", line=dict(width=4, color=p["color"])
-        ))
-        frame_data.append(go.Scattergeo(
-            lat=[lat2, right_lat], lon=[lon2, right_lon],
-            mode="lines", line=dict(width=4, color=p["color"])
-        ))
+        fdata.append(go.Scattergeo(lat=[p["lat"], lat2], lon=[p["lon"], lon2],
+                                   mode="lines", line=dict(width=4, color=p["color"])))
+        fdata.append(go.Scattergeo(lat=[lat2, left_lat], lon=[lon2, left_lon],
+                                   mode="lines", line=dict(width=4, color=p["color"])))
+        fdata.append(go.Scattergeo(lat=[lat2, right_lat], lon=[lon2, right_lon],
+                                   mode="lines", line=dict(width=4, color=p["color"])))
 
-    frames.append(go.Frame(data=frame_data, name=f"f{i}"))
+    frames.append(go.Frame(name=f"f{i}", data=fdata))
 
 fig.frames = frames
 
 # -----------------------
-# Layout with BLUE OCEAN
+# Layout with blue ocean
 # -----------------------
 fig.update_layout(
     geo=dict(
@@ -315,12 +316,11 @@ fig.update_layout(
         showland=True,
         showocean=True,
         landcolor="rgba(211, 211, 211, 1)",
-        oceancolor="rgba(179, 229, 252, 0.8)",  
+        oceancolor="rgba(179, 229, 252, 0.8)",
         coastlinecolor="rgba(100,100,100,0.6)",
         showcoastlines=True,
         projection_type="orthographic",
-        projection_rotation=dict(lat=sel_lat, lon=sel_lon),
-        scope="world"
+        projection_rotation=dict(lat=sel_lat, lon=sel_lon)
     ),
     margin=dict(l=0, r=0, t=10, b=0),
     showlegend=False,
@@ -339,12 +339,51 @@ fig.update_layout(
 )
 
 # -----------------------
-# Show plot
+# Show Globe
 # -----------------------
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------
-# Details section
+# Wind-Speed Legend (Sidebar)
+# -----------------------
+with st.sidebar:
+    st.markdown("## 🌬 Wind Speed Legend")
+    st.write("Arrow colors represent wind intensity (m/s).")
+
+    legend_html = """
+    <div style="padding:10px; background-color:#111; border-radius:8px;">
+        <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <div style="width:22px; height:10px; background:rgb(0,0,200); margin-right:8px;"></div>
+            <span style="color:white;">0 – 1 m/s (Calm)</span>
+        </div>
+        <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <div style="width:22px; height:10px; background:rgb(0,120,230); margin-right:8px;"></div>
+            <span style="color:white;">1 – 3 m/s (Light Breeze)</span>
+        </div>
+        <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <div style="width:22px; height:10px; background:rgb(60,255,120); margin-right:8px;"></div>
+            <span style="color:white;">3 – 6 m/s (Moderate Breeze)</span>
+        </div>
+        <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <div style="width:22px; height:10px; background:rgb(255,255,0); margin-right:8px;"></div>
+            <span style="color:white;">6 – 10 m/s (Strong Breeze)</span>
+        </div>
+        <div style="display:flex; align-items:center; margin-bottom:6px;">
+            <div style="width:22px; height:10px; background:rgb(255,170,0); margin-right:8px;"></div>
+            <span style="color:white;">10 – 12 m/s (High Wind)</span>
+        </div>
+        <div style="display:flex; align-items:center;">
+            <div style="width:22px; height:10px; background:rgb(255,80,0); margin-right:8px;"></div>
+            <span style="color:white;">12 – 15 m/s (Very Strong Wind)</span>
+        </div>
+    </div>
+    """
+    st.markdown(legend_html, unsafe_allow_html=True)
+
+
+
+# -----------------------
+# Details Section (fixed)
 # -----------------------
 st.subheader(f"📍 Details — {selected}")
 
@@ -352,27 +391,130 @@ forecast = get_forecast(sel_lat, sel_lon)
 air = get_air(sel_lat, sel_lon)
 wspd, wdir = get_wind(sel_lat, sel_lon)
 
-left, right = st.columns([2,1])
+# Prepare safe defaults for summary (extract values BEFORE creating the summary)
+cur_temp = None
+cur_hum = None
+pm25 = None
+pm10 = None
+aqi = None
 
+# Extract current temp & humidity from forecast safely
+try:
+    cur_temp = forecast.get("hourly", {}).get("temperature_2m", [None])[0]
+except Exception:
+    cur_temp = None
+
+try:
+    cur_hum = forecast.get("hourly", {}).get("relativehumidity_2m", [None])[0]
+except Exception:
+    cur_hum = None
+
+# Extract AQI values safely
+try:
+    pm25 = air.get("hourly", {}).get("pm2_5", [None])[0]
+    pm10 = air.get("hourly", {}).get("pm10", [None])[0]
+    aqi = air.get("hourly", {}).get("us_aqi", [None])[0]
+except Exception:
+    pm25 = pm10 = aqi = None
+
+left, right = st.columns([2, 1])
+
+# ------------------------------------------------------
+# NEW FEATURE — AI-STYLE WEATHER SUMMARY (2–3 SENTENCES)
+# ------------------------------------------------------
+def summarize_weather(temp, hum, wind, aqi):
+    sentences = []
+
+    # Temperature interpretation
+    if temp is not None:
+        try:
+            tval = float(temp)
+        except:
+            tval = None
+        if tval is not None:
+            if tval < 10:
+                sentences.append(f"The temperature is quite cold at around {tval}°C, so conditions may feel chilly.")
+            elif tval < 20:
+                sentences.append(f"The temperature is mild at about {tval}°C, comfortable for most outdoor activities.")
+            elif tval < 30:
+                sentences.append(f"The temperature is warm at roughly {tval}°C.")
+            else:
+                sentences.append(f"It's quite hot right now at around {tval}°C, which may feel uncomfortable outdoors.")
+
+    # Humidity interpretation
+    if hum is not None:
+        try:
+            hval = float(hum)
+        except:
+            hval = None
+        if hval is not None:
+            if hval > 70:
+                sentences.append("Humidity is high, which can make the weather feel heavier and more uncomfortable.")
+            elif hval > 40:
+                sentences.append("Humidity levels are moderate and generally comfortable.")
+            else:
+                sentences.append("Humidity is low, so the air may feel dry.")
+
+    # Wind interpretation
+    if wind is not None:
+        try:
+            wval = float(wind)
+        except:
+            wval = None
+        if wval is not None:
+            if wval < 3:
+                sentences.append("Winds are very light, keeping conditions calm.")
+            elif wval < 7:
+                sentences.append("There's a gentle to moderate breeze.")
+            else:
+                sentences.append("Winds are strong, which may affect outdoor comfort.")
+
+    # AQI interpretation
+    if aqi is not None:
+        try:
+            aval = float(aqi)
+        except:
+            aval = None
+        if aval is not None:
+            if aval <= 50:
+                sentences.append("Air quality is excellent, making outdoor activities completely safe.")
+            elif aval <= 100:
+                sentences.append("Air quality is acceptable for most people.")
+            else:
+                sentences.append("Air quality is poor, so sensitive groups should limit outdoor exposure.")
+
+    return " ".join(sentences[:3])  # only 2–3 sentences
+
+st.markdown("### Climate sight")
+summary = summarize_weather(cur_temp, cur_hum, wspd, aqi)
+st.markdown(f"<p style='font-size:19px; color:#e5e5e5;'>{summary}</p>", unsafe_allow_html=True)
+
+# -----------------------
+# Left column: Current Weather + chart
+# -----------------------
 with left:
     st.markdown("### 🌦 Current Weather")
-    try:
-        cur_temp = forecast["hourly"]["temperature_2m"][0]
+    if cur_temp is not None:
         st.markdown(f"**Temperature:** <span class='big-value'>{cur_temp} °C</span>", unsafe_allow_html=True)
-    except:
-        st.markdown("Temperature unavailable")
+    else:
+        st.write("Temperature unavailable")
 
-    try:
-        cur_hum = forecast["hourly"]["relativehumidity_2m"][0]
+    if cur_hum is not None:
         st.markdown(f"**Humidity:** <span class='big-value'>{cur_hum}%</span>", unsafe_allow_html=True)
-    except:
+    else:
         st.write("Humidity unavailable")
 
     st.markdown("### 🌬 Wind")
     if wdir is not None:
-        st.markdown(f"Direction: <span class='big-value'>{int(wdir)}° ({deg_to_compass(wdir)})</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"Direction: <span class='big-value'>{int(wdir)}° ({deg_to_compass(wdir)})</span>",
+            unsafe_allow_html=True
+        )
     if wspd is not None:
-        st.markdown(f"Speed: <span class='big-value'>{wspd} m/s</span>", unsafe_allow_html=True)
+        st.markdown(
+            f"Speed: <span class='big-value'>{wspd} m/s</span>",
+            unsafe_allow_html=True
+        )
 
     st.markdown("### 📍 Coordinates")
     st.markdown(f"Latitude: <span class='big-value'>{sel_lat}</span>", unsafe_allow_html=True)
@@ -381,24 +523,35 @@ with left:
     st.markdown("### 📈 48hr Temperature")
     st.plotly_chart(plot_temp48(forecast), use_container_width=True)
 
+# -----------------------
+# Right column: Air Quality
+# -----------------------
 with right:
     st.markdown("### 🌫 Air Quality")
-    try:
-        pm25 = air["hourly"]["pm2_5"][0]
-        pm10 = air["hourly"]["pm10"][0]
-        aqi = air["hourly"]["us_aqi"][0]
-        st.markdown(f"PM2.5: <span class='big-value'>{pm25}</span>", unsafe_allow_html=True)
-        st.markdown(f"PM10: <span class='big-value'>{pm10}</span>", unsafe_allow_html=True)
-        st.markdown(f"US AQI: <span class='big-value'>{aqi}</span>", unsafe_allow_html=True)
-    except:
-        st.write("AQI unavailable")
+    if pm25 is not None or pm10 is not None or aqi is not None:
+        try:
+            if pm25 is not None:
+                st.markdown(f"PM2.5: <span class='big-value'>{pm25}</span>", unsafe_allow_html=True)
+            if pm10 is not None:
+                st.markdown(f"PM10: <span class='big-value'>{pm10}</span>", unsafe_allow_html=True)
+            if aqi is not None:
+                st.markdown(f"US AQI: <span class='big-value'>{aqi}</span>", unsafe_allow_html=True)
+        except Exception:
+            st.write("Air quality unavailable")
+    else:
+        st.write("Air quality unavailable")
 
+# -----------------------
+# 7-day Summary (unchanged)
+# -----------------------
 st.markdown("### 📅 7-day Summary")
 try:
     daily = forecast["daily"]
-    st.markdown(f"Max Today: <span class='big-value'>{daily['temperature_2m_max'][0]} °C</span>", unsafe_allow_html=True)
-    st.markdown(f"Min Today: <span class='big-value'>{daily['temperature_2m_min'][0]} °C</span>", unsafe_allow_html=True)
-    st.markdown(f"Rain Today: <span class='big-value'>{daily['precipitation_sum'][0]} mm</span>", unsafe_allow_html=True)
-except:
+    st.markdown(f"Max Today: <span class='big-value'>{daily['temperature_2m_max'][0]} °C</span>",
+                unsafe_allow_html=True)
+    st.markdown(f"Min Today: <span class='big-value'>{daily['temperature_2m_min'][0]} °C</span>",
+                unsafe_allow_html=True)
+    st.markdown(f"Rain Today: <span class='big-value'>{daily['precipitation_sum'][0]} mm</span>",
+                unsafe_allow_html=True)
+except Exception:
     st.write("Forecast unavailable")
-
